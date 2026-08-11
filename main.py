@@ -20,19 +20,23 @@ import os
 # flask app
 app = Flask(__name__)
 
-
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # load databasedataset===================================
-sym_des = pd.read_csv("datasets/symtoms_df.csv")
-precautions = pd.read_csv("datasets/precautions_df.csv")
-workout = pd.read_csv("datasets/workout_df.csv")
-description = pd.read_csv("datasets/description.csv")
-medications = pd.read_csv('datasets/medications.csv')
-diets = pd.read_csv("datasets/diets.csv")
+def data_path(*parts):
+    return os.path.join(BASE_DIR, *parts)
+
+sym_des = pd.read_csv(data_path("datasets", "symtoms_df.csv"))
+precautions = pd.read_csv(data_path("datasets", "precautions_df.csv"))
+workout = pd.read_csv(data_path("datasets", "workout_df.csv"))
+description = pd.read_csv(data_path("datasets", "description.csv"))
+medications = pd.read_csv(data_path('datasets', 'medications.csv'))
+diets = pd.read_csv(data_path("datasets", "diets.csv"))
 
 
 # load model===========================================
-svc = pickle.load(open('models/svc.pkl','rb'))
+with open(data_path('models', 'svc.pkl'), 'rb') as model_file:
+    svc = pickle.load(model_file)
 
 
 #============================================================
@@ -63,9 +67,10 @@ diseases_list = {15: 'Fungal infection', 4: 'Allergy', 16: 'GERD', 9: 'Chronic c
 def get_predicted_value(patient_symptoms):
     input_vector = np.zeros(len(symptoms_dict))
     for item in patient_symptoms:
+        if item not in symptoms_dict:
+            raise ValueError(f"Unknown symptom: {item}")
         input_vector[symptoms_dict[item]] = 1
     return diseases_list[svc.predict([input_vector])[0]]
-
 
 
 
@@ -93,16 +98,20 @@ def home():
             user_symptoms = [s.strip() for s in symptoms.split(',')]
             # Remove any extra characters, if any
             user_symptoms = [symptom.strip("[]' ") for symptom in user_symptoms]
-            predicted_disease = get_predicted_value(user_symptoms)
-            dis_des, precautions, medications, rec_diet, workout = helper(predicted_disease)
+            try:
+                predicted_disease = get_predicted_value(user_symptoms)
+                dis_des, precautions, medications, rec_diet, workout = helper(predicted_disease)
 
-            my_precautions = []
-            for i in precautions[0]:
-                my_precautions.append(i)
+                my_precautions = []
+                for i in precautions[0]:
+                    my_precautions.append(i)
 
-            return render_template('index.html', predicted_disease=predicted_disease, dis_des=dis_des,
-                                   my_precautions=my_precautions, medications=medications, my_diet=rec_diet,
-                                   workout=workout)
+                return render_template('index.html', predicted_disease=predicted_disease, dis_des=dis_des,
+                                       my_precautions=my_precautions, medications=medications, my_diet=rec_diet,
+                                       workout=workout)
+            except Exception as e:
+                message = f"An error occurred while processing symptoms: {e}"
+                return render_template('index.html', message=message)
 
     return render_template('index.html')
 
